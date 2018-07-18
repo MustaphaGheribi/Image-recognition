@@ -6,13 +6,10 @@ import ImageLinkForm from './components/imageLinkForm/ImageLinkForm';
 import Rank from './components/rank/Rank';
 import FaceRecognition from './components/faceRecognition/FaceRecognition';
 import SignIn from './components/signIn/SignIn';
+import Register from './components/registration/Registration';
 import Particles from 'react-particles-js';
-import Clarifai from 'clarifai';
 
 
-const app = new Clarifai.App({
-    apiKey: 'a76d8ef357094228958437b52a77a0d4'
-});
 const particlesOptions = {
     particles: {
        number: {
@@ -28,20 +25,40 @@ const particlesOptions = {
         }
     }
 };
+const initialState = {
+    input: '',
+    imgUrl: '',
+    box: {},
+    route: 'signIn',
+    isSignedIn: false,
+    user: {
+        id: '',
+        name: '',
+        email: '',
+        entries: 0,
+        joined: ''
+    }
+} 
 
 class App extends Component {
 
     constructor() {
         super();
-        this.state =  {
-            input: '',
-            imgUrl: '',
-            box: {}
+        this.state = initialState;
+    }
+
+     loadUser = (data) => {
+      this.setState({user: {
+          id: data.id,
+          name: data.name,
+          email: data.email,
+          entries: data.entries,
+          joined: data.joined
         }
+      })
     }
 
     calculateBox = (box) => {
-        console.log(box);
         this.setState({box});
     }
 
@@ -58,17 +75,50 @@ class App extends Component {
         }
     }
 
-
     onInputChange = (event) => {
         this.setState({input: event.target.value});
     }
 
     onSubmit = () => {
         this.setState({imgUrl: this.state.input});
-        app.models.predict(Clarifai.FACE_DETECT_MODEL, this.state.input)
-            .then(response => this.calculateBox(this.calculateFaceLocation(response)))
+            fetch('https://frozen-forest-54963.herokuapp.com/imageurl',{
+                        method: 'post',
+                        headers:{
+                            'Content-type':' application/json'
+                        },
+                        body: JSON.stringify({
+                            input: this.state.input
+                        })
+            })
+            .then(response => response.json())
+            .then(response => {
+                if(response){
+                    fetch('https://frozen-forest-54963.herokuapp.com/image',{
+                        method: 'put',
+                        headers:{
+                            'Content-type':' application/json'
+                        },
+                        body: JSON.stringify({
+                            id: this.state.user.id
+                        })
+                    })
+                    .then(resp => resp.json())
+                    .then(count => this.setState(Object.assign(this.state.user,{entries: count})))
+                    .catch(err => console.log)
+                }
+                this.calculateBox(this.calculateFaceLocation(response))
+            })
             .catch(err => console.log(err))
 
+    }
+
+    onRouteChange = (route) => {
+        if( route ==='home') {
+            this.setState({isSignedIn: true})
+        } else if(route ==='signOut') {
+            this.setState(initialState);
+        }
+        this.setState({route});
     }
 
     render() {
@@ -77,15 +127,29 @@ class App extends Component {
           <Particles className='particles'
               params={particlesOptions}
           />
-        <Navigation />
-          <SignIn/>
-          <Logo/>
-          <Rank/>
-          < ImageLinkForm onInputChange={this.onInputChange}
-                          onSubmit={this.onSubmit} />
-          <FaceRecognition imgUrl={this.state.imgUrl}
-                           box={this.state.box}
-          />
+        <Navigation isSignedIn={this.state.isSignedIn} onRouteChange={this.onRouteChange}
+
+        />
+          {
+              this.state.route ==='home'
+              ?
+                  <div>
+                      <Logo/>
+                      <Rank name={this.state.user.name} entries={this.state.user.entries}/>
+                      < ImageLinkForm onInputChange={this.onInputChange}
+                                      onSubmit={this.onSubmit} />
+                      <FaceRecognition imgUrl={this.state.imgUrl}
+                                       box={this.state.box}
+                      />
+                  </div>
+              :
+                  (
+                  this.state.route ==='signIn' ?  <SignIn loadUser={this.loadUser} onRouteChange={this.onRouteChange}/>
+                  : <Register loadUser={this.loadUser} onRouteChange={this.onRouteChange} />
+                  )
+
+          }
+
       </div>
     );
   }
